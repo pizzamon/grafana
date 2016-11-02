@@ -69,7 +69,16 @@ function (angular, _, moment, dateMath, kbn, CloudWatchAnnotationQuery) {
 
     this._getPeriod = function(target, query, options, start, end) {
       var period;
+      var period_interval = 60;
       var range = end - start;
+
+      // determine the period interval according to cloudwatch retention schedule
+      if (start < moment().subtract(63, "days").unix()) {
+        period_interval = 60 * 60;
+      }
+      else if (start < moment().subtract(15, "days").unix()) {
+        period_interval = 60 * 5;
+      }
 
       if (!target.period) {
         period = (query.namespace === 'AWS/EC2') ? 300 : 60;
@@ -78,11 +87,13 @@ function (angular, _, moment, dateMath, kbn, CloudWatchAnnotationQuery) {
       } else {
         period = kbn.interval_to_seconds(templateSrv.replace(target.period, options.scopedVars));
       }
-      if (query.period < 60) {
-        period = 60;
-      }
-      if (range / query.period >= 1440) {
-        period = Math.ceil(range / 1440 / 60) * 60;
+
+      period = Math.max(period, period_interval);
+
+      if (range / period >= 1440) {
+        period = Math.ceil(range / 1440 / period_interval) * period_interval;
+      } else {
+        period = Math.ceil(period / period_interval) * period_interval;
       }
 
       return period;
